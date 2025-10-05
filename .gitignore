@@ -23,6 +23,8 @@ media/
 
 # Local data dumps
 data/raw/
+data/processed/
+data/interim/
 
 # OS junk
 .DS_Store

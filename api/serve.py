@@ -35,6 +35,8 @@ MAX_BATCH = 50
 DEFAULT_MODEL_PATH = Path("models/lightgbm_final.txt")
 DEFAULT_CAL_PATH = Path("models/lightgbm_cal.json")
 DEFAULT_VET_PATH = Path("configs/vetting.yaml")
+DEFAULT_METRICS_PATH = Path("reports/holdout_metrics.json")
+DEFAULT_RELIABILITY_PATH = Path("artifacts/lightgbm_oof.npz")
 
 
 class PredictJSON(BaseModel):
@@ -295,8 +297,8 @@ def app() -> FastAPI:  # pragma: no cover - entrypoint for uvicorn --factory
     model = Path(os.getenv("MODEL_PATH", DEFAULT_MODEL_PATH))
     cal = Path(os.getenv("CAL_PATH", DEFAULT_CAL_PATH))
     vet = Path(os.getenv("VETTING_CFG", DEFAULT_VET_PATH))
-    metrics = Path(os.getenv("METRICS_PATH", "reports/holdout_metrics.json"))
-    reliability = Path(os.getenv("RELIABILITY_PATH", "data/processed/lightgbm/lightgbm_oof.npz"))
+    metrics = Path(os.getenv("METRICS_PATH", DEFAULT_METRICS_PATH))
+    reliability = Path(os.getenv("RELIABILITY_PATH", DEFAULT_RELIABILITY_PATH))
     engine = _build_engine(model, cal, vet, metrics, reliability)
     return create_app(engine)
 
@@ -306,8 +308,8 @@ def main() -> None:
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument("--cal", type=Path, default=DEFAULT_CAL_PATH)
     parser.add_argument("--vetting", type=Path, default=DEFAULT_VET_PATH)
-    parser.add_argument("--metrics", type=Path, default=Path("reports/holdout_metrics.json"))
-    parser.add_argument("--reliability", type=Path, default=Path("data/processed/lightgbm/lightgbm_oof.npz"))
+    parser.add_argument("--metrics", type=Path, default=DEFAULT_METRICS_PATH)
+    parser.add_argument("--reliability", type=Path, default=DEFAULT_RELIABILITY_PATH)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()

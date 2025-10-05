@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover - optional dependency
 EPS = 1e-12
 DEFAULT_MEDIA_DIR = Path("media")
 DEFAULT_REPORTS_PATH = Path("reports/holdout_metrics.json")
-DEFAULT_RELIABILITY_PATH = Path("data/processed/lightgbm/lightgbm_oof.npz")
+DEFAULT_RELIABILITY_PATH = Path("artifacts/lightgbm_oof.npz")
 DEFAULT_PLOTS_SUBDIR = "plots"
 DEFAULT_MPL_DIR = ".mpl-cache"
 
