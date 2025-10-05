@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import io
 import json
 import logging
@@ -13,7 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-import pandas as pd
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 import math
+
+try:  # Optional dependency for CSV handling when available
+    import pandas as pd  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - pandas stripped in production
+    pd = None  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:
@@ -76,18 +81,49 @@ def _error_response(code: str, message: str, status_code: int = 400) -> JSONResp
 def _parse_curve_file(file_bytes: bytes, filename: str) -> Dict[str, np.ndarray]:
     suffix = Path(filename or "").suffix.lower()
     if suffix == ".csv":
-        df = pd.read_csv(io.BytesIO(file_bytes))
-        missing = {"time", "flux"} - set(df.columns.str.lower())
-        if missing:
-            raise ValueError(f"faltan columnas {', '.join(sorted(missing))}")
-        # Normalize column names
-        cols = {c.lower(): c for c in df.columns}
-        time = df[cols["time"]].to_numpy(dtype=float)
-        flux = df[cols["flux"]].to_numpy(dtype=float)
-        flux_err = (
-            df[cols.get("flux_err")].to_numpy(dtype=float) if "flux_err" in cols else None
-        )
-        return {"time": time, "flux": flux, "flux_err": flux_err}
+        if pd is not None:
+            df = pd.read_csv(io.BytesIO(file_bytes))
+            missing = {"time", "flux"} - set(df.columns.str.lower())
+            if missing:
+                raise ValueError(f"faltan columnas {', '.join(sorted(missing))}")
+            cols = {c.lower(): c for c in df.columns}
+            time = df[cols["time"]].to_numpy(dtype=float)
+            flux = df[cols["flux"]].to_numpy(dtype=float)
+            flux_err = (
+                df[cols.get("flux_err")].to_numpy(dtype=float) if "flux_err" in cols else None
+            )
+            return {"time": time, "flux": flux, "flux_err": flux_err}
+
+        text = file_bytes.decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames:
+            raise ValueError("archivo CSV sin cabeceras")
+        name_map = {name.lower(): name for name in reader.fieldnames}
+        if "time" not in name_map or "flux" not in name_map:
+            raise ValueError("faltan columnas time o flux")
+
+        time_vals: list[float] = []
+        flux_vals: list[float] = []
+        flux_err_vals: list[float] | None = [] if "flux_err" in name_map else None
+
+        for row in reader:
+            try:
+                time_vals.append(float(row[name_map["time"]]))
+                flux_vals.append(float(row[name_map["flux"]]))
+                if flux_err_vals is not None:
+                    value = row.get(name_map["flux_err"], "")
+                    flux_err_vals.append(float(value) if value not in ("", None) else float("nan"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("no se pudo convertir CSV a floats") from exc
+
+        flux_err_array = None
+        if flux_err_vals is not None:
+            flux_err_array = np.asarray(flux_err_vals, dtype=float)
+        return {
+            "time": np.asarray(time_vals, dtype=float),
+            "flux": np.asarray(flux_vals, dtype=float),
+            "flux_err": flux_err_array,
+        }
 
     if suffix in {".fits", ".fit", ".fz"}:
         try:
