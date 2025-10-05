@@ -1,0 +1,34 @@
+{
+  "classes": [
+    "CP",
+    "FP",
+    "PC"
+  ],
+  "alpha_base": 0.0,
+  "temperature_lgbm": 0.84373725900876,
+  "temperature_cnn": 1.0520325649284485,
+  "metrics_lgbm": {
+    "macro_f1": 0.9803090363252789,
+    "log_loss": 0.07525848320466998,
+    "ece": 0.013858916044403757,
+    "report": "              precision    recall  f1-score   support\n\n          CP       1.00      0.95      0.98        88\n          FP       0.97      1.00      0.98        87\n          PC       0.96      1.00      0.98        26\n\n    accuracy                           0.98       201\n   macro avg       0.98      0.98      0.98       201\nweighted avg       0.98      0.98      0.98       201\n"
+  },
+  "metrics_cnn": {
+    "macro_f1": 0.3062149185095016,
+    "log_loss": 1.0426200651264002,
+    "ece": 0.04525852738514283,
+    "report": "              precision    recall  f1-score   support\n\n          CP       0.45      0.36      0.40        88\n          FP       0.43      0.64      0.52        87\n          PC       0.00      0.00      0.00        26\n\n    accuracy                           0.44       201\n   macro avg       0.29      0.34      0.31       201\nweighted avg       0.38      0.44      0.40       201\n"
+  },
+  "metrics_blend": {
+    "macro_f1": 0.9803090363252789,
+    "log_loss": 0.1292889571114589,
+    "ece": 0.050862304742659924,
+    "report": "              precision    recall  f1-score   support\n\n          CP       1.00      0.95      0.98        88\n          FP       0.97      1.00      0.98        87\n          PC       0.96      1.00      0.98        26\n\n    accuracy                           0.98       201\n   macro avg       0.98      0.98      0.98       201\nweighted avg       0.98      0.98      0.98       201\n"
+  },
+  "metrics_phys": {
+    "macro_f1": 0.9803090363252789,
+    "log_loss": 0.12892380837018094,
+    "ece": 0.05046138950881462,
+    "report": "              precision    recall  f1-score   support\n\n          CP       1.00      0.95      0.98        88\n          FP       0.97      1.00      0.98        87\n          PC       0.96      1.00      0.98        26\n\n    accuracy                           0.98       201\n   macro avg       0.98      0.98      0.98       201\nweighted avg       0.98      0.98      0.98       201\n"
+  }
+}
