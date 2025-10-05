@@ -1,0 +1,38 @@
+# Python cache and build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs and generated artifacts
+logs/
+artifacts/
+reports/
+predictions/
+media/
+
+# Local data dumps
+data/raw/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Cache directories
+.cache/
+.mypy_cache/
+.pytest_cache/
+
+# IDE settings
+.vscode/
+.idea/
