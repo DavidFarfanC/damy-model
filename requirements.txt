@@ -1,10 +1,7 @@
 fastapi
 uvicorn
 lightgbm
-lightkurve
-astropy
 numpy
 pandas
-scikit-learn
 pyyaml
 python-multipart

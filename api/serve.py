@@ -100,13 +100,15 @@ def _parse_curve_file(file_bytes: bytes, filename: str) -> Dict[str, np.ndarray]
             tmp_path = Path(tmp.name)
         try:
             lc = load_lightcurve(tmp_path)
-            return {
-                "time": lc.time.value.astype(float),
-                "flux": lc.flux.value.astype(float),
-                "flux_err": lc.flux_err.value.astype(float) if lc.flux_err is not None else None,
-            }
+        except ModuleNotFoundError as exc:
+            raise ValueError("se requiere lightkurve para leer archivos FITS") from exc
         finally:
             tmp_path.unlink(missing_ok=True)
+        return {
+            "time": lc.time.value.astype(float),
+            "flux": lc.flux.value.astype(float),
+            "flux_err": lc.flux_err.value.astype(float) if lc.flux_err is not None else None,
+        }
 
     raise ValueError("formato de curva no soportado (usa .csv o .fits)")
 

@@ -456,6 +456,34 @@ class InferenceEngine:
         flux: np.ndarray,
         flux_err: Optional[np.ndarray],
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if lk is None:
+            mask = np.isfinite(time) & np.isfinite(flux)
+            if flux_err is not None:
+                mask &= np.isfinite(flux_err)
+            time = time[mask]
+            flux = flux[mask]
+            if flux_err is None:
+                flux_err = np.zeros_like(flux)
+            else:
+                flux_err = flux_err[mask]
+
+            if len(time) == 0:
+                raise ValueError("light curve is empty after filtering invalid samples")
+
+            flux = flux - float(np.nanmedian(flux))
+
+            sigma = float(getattr(self.quality_cfg, "sigma_clip", 0.0) or 0.0)
+            if sigma > 0.0:
+                center = float(np.nanmedian(flux))
+                spread = float(np.nanstd(flux))
+                if spread > 0.0:
+                    clip_mask = np.abs(flux - center) <= sigma * spread
+                    time = time[clip_mask]
+                    flux = flux[clip_mask]
+                    flux_err = flux_err[clip_mask]
+
+            return time, flux, flux_err
+
         ensure_lightkurve()
         if flux_err is None:
             flux_err = np.zeros_like(flux)
