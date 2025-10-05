@@ -10,11 +10,15 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import lightgbm as lgb
 import numpy as np
-import pandas as pd
+
+try:  # Optional dependency; inference can run without pandas
+    import pandas as pd  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional fallback
+    pd = None  # type: ignore
 
 from .config import FeatureConfig, PhaseFoldConfig, PipelineConfig, QualityMaskConfig
 from .features.physical import PhysicalFeatureResult, extract_physical_features
@@ -228,34 +232,31 @@ class InferenceEngine:
     # ------------------------------------------------------------------
     # Core prediction utilities
     # ------------------------------------------------------------------
-    def predict(self, df: pd.DataFrame, include_shap: bool = True) -> List[Dict[str, Any]]:
-        meta_cols = {"target_id", "mission"}
-        df = df.copy()
-        for col in meta_cols:
-            if col in df.columns:
-                df[col] = df[col].astype(str)
+    def predict(self, data: Any, include_shap: bool = True) -> List[Dict[str, Any]]:
+        records = self._normalize_records(data)
+        if not records:
+            return []
 
-        features = self._prepare_dataframe(df)
-        X = features.to_numpy()
+        matrix, metadata_rows, feature_rows = self._prepare_feature_matrix(records)
 
-        raw_probs = self.booster.predict(X)
+        raw_probs = self.booster.predict(matrix)
         if raw_probs.ndim == 1:
             raw_probs = np.vstack([1 - raw_probs, raw_probs]).T
 
         calibrated = self._temperature_scale(raw_probs)
-        adjusted, vetting_details = self._apply_vetting(calibrated, df)
+        adjusted, vetting_details = self._apply_vetting(calibrated, feature_rows)
 
-        shap_values = self._predict_shap(X) if include_shap else None
+        shap_values = self._predict_shap(matrix) if include_shap else None
 
         results: List[Dict[str, Any]] = []
-        for idx, row in df.iterrows():
+        for idx, meta in enumerate(metadata_rows):
             sample_probs = adjusted[idx]
             prob_map = {cls: float(sample_probs[self.class_to_idx[cls]]) for cls in self.classes}
             raw_map = {cls: float(calibrated[idx, self.class_to_idx[cls]]) for cls in self.classes}
             vet_detail = vetting_details[idx]
             entry: Dict[str, Any] = {
-                "target_id": row.get("target_id", f"obj_{idx}"),
-                "mission": row.get("mission", None),
+                "target_id": meta["target_id"],
+                "mission": meta["mission"],
                 "probabilities": prob_map,
                 "probabilities_raw": raw_map,
                 "flags": vet_detail["flags"],
@@ -340,7 +341,7 @@ class InferenceEngine:
             "mission": mission or "unknown",
         })
 
-        predictions = self.predict(pd.DataFrame([row]), include_shap=True)[0]
+        predictions = self.predict([row], include_shap=True)[0]
         probs = predictions["probabilities"]
         decision = self._decision_from_probs(probs)
         physics = self._approximate_physics_fit(feature_result, float(period), meta_duration)
@@ -437,12 +438,55 @@ class InferenceEngine:
             "brier": float(multicl.get("brier", float("nan"))),
         }
 
-    def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        out = df.copy()
-        for col in self.feature_cols:
-            if col not in out.columns:
-                out[col] = 0.0
-        return out[self.feature_cols]
+    def _normalize_records(self, data: Any) -> List[Dict[str, Any]]:
+        if data is None:
+            return []
+
+        if pd is not None and isinstance(data, pd.DataFrame):
+            return [dict(record) for record in data.to_dict(orient="records")]
+
+        if isinstance(data, Mapping):
+            return [dict(data)]
+
+        if isinstance(data, list) or isinstance(data, tuple):
+            records: List[Dict[str, Any]] = []
+            for item in data:
+                if not isinstance(item, Mapping):
+                    raise TypeError("predict expects mappings with feature values")
+                records.append(dict(item))
+            return records
+
+        raise TypeError("predict expects a mapping or a sequence of mappings")
+
+    def _prepare_feature_matrix(
+        self, records: Sequence[Dict[str, Any]]
+    ) -> Tuple[np.ndarray, List[Dict[str, Any]], List[Dict[str, Any]]]:
+        n_samples = len(records)
+        matrix = np.zeros((n_samples, len(self.feature_cols)), dtype=float)
+        metadata_rows: List[Dict[str, Any]] = []
+        feature_rows: List[Dict[str, Any]] = []
+
+        for idx, original in enumerate(records):
+            row = dict(original)
+            feature_rows.append(row)
+
+            target = row.get("target_id")
+            mission = row.get("mission")
+            metadata_rows.append(
+                {
+                    "target_id": str(target) if target is not None else f"obj_{idx}",
+                    "mission": None if mission is None else str(mission),
+                }
+            )
+
+            for col_idx, col in enumerate(self.feature_cols):
+                value = row.get(col, 0.0)
+                try:
+                    matrix[idx, col_idx] = float(value)
+                except (TypeError, ValueError):  # pragma: no cover - defensive
+                    matrix[idx, col_idx] = 0.0
+
+        return matrix, metadata_rows, feature_rows
 
     def _temperature_scale(self, probs: np.ndarray) -> np.ndarray:
         if self.temperature is None:
@@ -491,7 +535,7 @@ class InferenceEngine:
         clean_time, clean_flux, clean_err = clean_lightcurve(lc, self.quality_cfg)
         return clean_time, clean_flux, clean_err
 
-    def _compute_flags(self, row: pd.Series) -> Tuple[Dict[str, bool], Dict[str, float]]:
+    def _compute_flags(self, row: Mapping[str, Any]) -> Tuple[Dict[str, bool], Dict[str, float]]:
         w = self.vetting.weights
         t = self.vetting.thresholds
 
@@ -525,13 +569,15 @@ class InferenceEngine:
         }
         return flags_bool, penalties
 
-    def _apply_vetting(self, probs: np.ndarray, features: pd.DataFrame) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+    def _apply_vetting(
+        self, probs: np.ndarray, features: Sequence[Mapping[str, Any]]
+    ) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
         cp_idx = self.class_to_idx.get("CP", 0)
         fp_idx = self.class_to_idx.get("FP", 1 if len(self.classes) > 1 else 0)
 
         adjusted = np.empty_like(probs)
         details: List[Dict[str, Any]] = []
-        for i, row in features.iterrows():
+        for i, row in enumerate(features):
             flags, penalties = self._compute_flags(row)
             penalty_total = float(sum(penalties.values()))
             logits = np.log(np.clip(probs[i], EPS, 1.0))

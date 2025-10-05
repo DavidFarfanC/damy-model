@@ -11,16 +11,17 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    "pandas",
-    "astropy",
-    "lightkurve",
-    "scikit-learn",
     "lightgbm",
+    "pyyaml",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]
+datasets = ["pandas", "lightkurve", "astropy", "scikit-learn"]
 cnn = ["torch", "torchvision"]
-ui = ["fastapi", "uvicorn", "streamlit"]
+ui = ["streamlit"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

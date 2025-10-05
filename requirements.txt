@@ -2,6 +2,5 @@ fastapi
 uvicorn
 lightgbm
 numpy
-pandas
 pyyaml
 python-multipart
