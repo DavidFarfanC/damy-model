@@ -16,8 +16,6 @@ env/
 
 # Logs and generated artifacts
 logs/
-artifacts/
-reports/
 predictions/
 media/
 
@@ -25,6 +23,12 @@ media/
 data/raw/
 data/processed/
 data/interim/
+data/external/
+data/metadata/
+
+# Generated media and large docs
+reports/figures/
+reports/*.pdf
 
 # OS junk
 .DS_Store
